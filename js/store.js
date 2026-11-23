@@ -51,6 +51,7 @@
   function applyCfg(key, v) {
     if (key === 'exercise') { S.cfg.name = v.name || S.cfg.name; S.cfg.yellow = +v.yellow_min || 5; S.cfg.red = +v.red_min || 15; }
     if (key === 'lead_pin_sha256') S.cfg.pin = v;
+    if (key === 'scenario') S.cfg.scenario = v;
     emit();
   }
   function addEvent(r) { if (!S.events.some(x => x.id === r.id)) S.events.push(r); emit(); }

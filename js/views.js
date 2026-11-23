@@ -283,22 +283,104 @@
       return list;
     };
   }
+  /* ---- forgatókönyv: Word-import + tárolás (lwp_config 'scenario') ---- */
+  const TEMPLATE = 'assets/esemeny-sablon_v0.1_2026-11-23.docx';
+  const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const txt = html => { const d = document.createElement('div'); d.innerHTML = html; return (d.textContent || '').replace(/\s+/g, ' ').trim(); };
+  function splitTitle(html) {
+    const d = document.createElement('div'); d.innerHTML = U.sanitize(html);
+    const first = Array.from(d.children).find(e => (e.textContent || '').trim());
+    if (!first) return { title: '', html: '' };
+    const t = first.textContent.replace(/\s+/g, ' ').trim();
+    if (t.length <= 100) { first.remove(); return { title: t, html: d.innerHTML }; }
+    return { title: t.slice(0, 90) + '…', html: d.innerHTML };
+  }
+  function parseTables(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const items = []; let cur = null;
+    doc.querySelectorAll('table').forEach(tb => {
+      const rows = Array.from(tb.querySelectorAll('tr'));
+      let map = { no: 0, time: 1, to: 2, mode: 3, content: 4, task: 5 };
+      const hdr = Array.from(rows[0] ? rows[0].children : []).map(c => norm(c.textContent));
+      if (hdr.some(x => /kozles|szama|kinek|tartalom/.test(x))) {
+        const m = {};
+        hdr.forEach((x, i) => {
+          if (/szama|sorszam/.test(x)) m.no = i;
+          else if (/idotartam|idopont|^ido/.test(x)) m.time = i;
+          else if (/kinek|cimzett/.test(x)) m.to = i;
+          else if (/modja|eszkoz|csatorna/.test(x)) m.mode = i;
+          else if (/tartalom|tenyallas/.test(x)) m.content = i;
+          else if (/tevekenyseg|feladat|eredmeny|gyakorlo/.test(x)) m.task = i;
+        });
+        map = Object.assign(map, m); rows.shift();
+      }
+      rows.forEach(tr => {
+        const c = Array.from(tr.children), g = k => (c[map[k]] ? c[map[k]].innerHTML : ''), gt = k => (c[map[k]] ? txt(c[map[k]].innerHTML) : '');
+        const no = gt('no'), content = g('content'), task = g('task');
+        if (/^\d+/.test(no)) {
+          const sp = splitTitle(content);
+          cur = { no: String(parseInt(no, 10)), time: gt('time'), to: gt('to'), mode: gt('mode'), title: sp.title || ('Esemény ' + parseInt(no, 10)), html: sp.html, task: U.sanitize(task) };
+          items.push(cur);
+        } else if (cur && (txt(content) || txt(task))) {
+          cur.html += U.sanitize(content); cur.task += U.sanitize(task);
+        }
+      });
+    });
+    return items;
+  }
+  async function parseWord(file) {
+    if (!window.mammoth) throw new Error('A Word-olvasó nem töltődött be.');
+    const res = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() }, { convertImage: mammoth.images.imgElement(() => Promise.resolve({ src: '' })) });
+    return parseTables(res.value);
+  }
+  function normSample(items) {
+    const toH = t => '<p>' + U.esc(t || '').replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
+    return items.map(it => {
+      const lines = (it.content || '').split('\n'); const rest = lines[0] && it.title && lines[0].startsWith(it.title.slice(0, 40)) && lines[0].length <= 100 ? lines.slice(1).join('\n').trim() : it.content;
+      return { no: String(it.no), time: it.time || '', to: it.to || '', mode: it.mode || '', title: it.title, html: rest ? toH(rest) : '', task: it.task && it.task !== '-' ? toH(it.task) : '' };
+    });
+  }
   function leadScript(L, root) {
-    root.innerHTML = `<div class="pane"><div class="ph"><h2>Forgatókönyv</h2><span class="muted">A „Szakmai forgatókönyv” közlései – egy kattintással bejátszhatók.</span><label>Csoport <select id="sg">${S.groups.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></label></div><div id="sc" class="scl"><p class="muted">Betöltés…</p></div></div>`;
-    let items = null;
-    const toHTML = t => '<p>' + U.esc(t).replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>') + '</p>';
-    fetch(SCEN).then(r => r.json()).then(j => { items = j.items; draw(); }).catch(() => { $('#sc').innerHTML = '<p class="err">A forgatókönyv-fájl nem tölthető be.</p>'; });
-    function draw() {
-      if (!items) return;
+    root.innerHTML = `<div class="pane"><div class="ph"><h2>Forgatókönyv</h2><span class="muted" id="sm"></span>
+      <label>Csoport <select id="sg">${S.groups.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></label>
+      <a class="btn" href="${TEMPLATE}" download>Sablon letöltése (Word)</a><label class="btn pri up">Word feltöltése<input type="file" id="wf" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden></label></div><div id="sc" class="scl"><p class="muted">Betöltés…</p></div></div>`;
+    let sample = null, sig = '';
+    const cur = () => (S.cfg.scenario && S.cfg.scenario.items) ? S.cfg.scenario.items : sample;
+    fetch(SCEN).then(r => r.json()).then(j => { sample = normSample(j.items); draw(true); }).catch(() => { sample = []; draw(true); });
+    function draw(force) {
+      const items = cur(); if (!items) return;
       const sent = {}; S.events.filter(e => e.type === 'inject').forEach(e => { const k = e.data && e.data.no; (sent[k] = sent[k] || []).push(e); });
-      $('#sc').innerHTML = items.map(it => `<details class="si"><summary><span class="no">${it.no}.</span><span class="tm">${esc(it.time)}</span><b>${esc(it.title)}</b>${sent[it.no] ? `<span class="badge ok">bejátszva ×${sent[it.no].length}</span>` : ''}</summary>
-        <div class="sb"><p class="muted">Kinek: ${esc(it.to || '–')} · Mód: ${esc(it.mode || '–')}</p><div class="sx">${toHTML(it.content)}</div>${it.task && it.task !== '-' ? `<h5>Feladat / tevékenység</h5><div class="sx">${toHTML(it.task)}</div>` : ''}
-        <div class="sa"><button class="btn pri" data-n="${it.no}" data-to="cop">Bejátszás a COP-ra</button><button class="btn" data-n="${it.no}" data-to="grp">Küldés a kijelölt csoportnak</button><button class="btn" data-n="${it.no}" data-to="all">Küldés minden csoportnak</button></div></div></details>`).join('');
+      const s2 = JSON.stringify([items.length, items.map(i => i.no + i.title), Object.keys(sent).map(k => k + sent[k].length)]);
+      if (!force && s2 === sig) return; sig = s2;
+      const sc = S.cfg.scenario;
+      $('#sm').textContent = sc && sc.items ? `Feltöltött forgatókönyv: ${sc.source || 'Word'} · ${items.length} esemény · ${fmtTime(sc.updated)}` : `Mintaforgatókönyv (Hőkupola 2027) · ${items.length} esemény – tölts fel Word-sablont a sajátodhoz.`;
+      $('#sc').innerHTML = items.length ? items.map((it, ix) => `<details class="si"><summary><span class="no">${esc(it.no)}.</span><span class="tm">${esc(it.time)}</span><b>${esc(it.title)}</b>${sent[it.no] ? `<span class="badge ok">bejátszva ×${sent[it.no].length}</span>` : ''}</summary>
+        <div class="sb"><p class="muted">Kinek: ${esc(it.to || '–')} · Mód: ${esc(it.mode || '–')}</p><div class="sx">${U.sanitize(it.html || '')}</div>${it.task ? `<h5>Feladat / tevékenység</h5><div class="sx">${U.sanitize(it.task)}</div>` : ''}
+        <div class="sa"><button class="btn pri" data-ix="${ix}" data-to="cop">Bejátszás a COP-ra</button><button class="btn" data-ix="${ix}" data-to="grp">Küldés a kijelölt csoportnak</button><button class="btn" data-ix="${ix}" data-to="all">Küldés minden csoportnak</button>${sc && sc.items ? `<button class="btn sm warn" data-del="${ix}">Törlés a listából</button>` : ''}</div></div></details>`).join('') : '<p class="muted">Nincs esemény. Töltsd le a sablont, töltsd ki, majd töltsd fel.</p>';
     }
+    async function save(items, source) { await LWP.setCfg('scenario', { items, source, updated: new Date().toISOString() }); }
+    $('#wf').onchange = async e => {
+      const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+      let items; try { items = await parseWord(f); } catch (err) { return U.toast('A fájl nem olvasható: ' + (err.message || err)); }
+      if (!items.length) return U.toast('Nem található esemény. Ellenőrizd, hogy a táblázat első oszlopában van sorszám.');
+      const have = S.cfg.scenario && S.cfg.scenario.items ? S.cfg.scenario.items : null;
+      const m = U.modal(`<h3>${items.length} esemény található</h3><p class="muted">${esc(f.name)}</p><div class="imp">${items.slice(0, 8).map(i => `<div><b>${esc(i.no)}.</b> ${esc(i.title)} <span class="muted">${esc(i.time)}</span></div>`).join('')}${items.length > 8 ? `<div class="muted">… és még ${items.length - 8}</div>` : ''}</div>
+        <div class="sa"><button class="btn pri" data-m="rep">${have ? 'Felváltja a meglévő forgatókönyvet' : 'Betöltés'}</button>${have ? '<button class="btn" data-m="add">Hozzáadás a meglévőhöz</button>' : ''}<button class="btn" data-close>Mégse</button></div>`);
+      m.onclick = async ev => {
+        const b = ev.target.closest('[data-m]'); if (!b) return;
+        try {
+          let out = items;
+          if (b.dataset.m === 'add') { const used = new Set(have.map(x => x.no)), mx = Math.max(0, ...have.map(x => parseInt(x.no, 10) || 0)); const clash = items.some(x => used.has(x.no)); out = have.concat(items.map(x => { if (clash) x.no = String((parseInt(x.no, 10) || 0) + mx); return x; })); }
+          await save(out, f.name); m.remove(); U.toast(out.length + ' esemény mentve.');
+        } catch (err) { U.toast(err.message); }
+      };
+    };
     $('#sc').onclick = async e => {
-      const b = e.target.closest('[data-n]'); if (!b) return;
-      const it = items.find(x => x.no == b.dataset.n);
-      const html = `<h3>${U.esc(it.title)}</h3>` + toHTML(it.content) + (it.task && it.task !== '-' ? `<p><b>Feladat:</b></p>` + toHTML(it.task) : '');
+      const del = e.target.closest('[data-del]');
+      if (del) { if (!confirm('Törlöd ezt az eseményt a listából?')) return; const items = cur().slice(); items.splice(+del.dataset.del, 1); try { await save(items, S.cfg.scenario.source); } catch (err) { U.toast(err.message); } return; }
+      const b = e.target.closest('[data-ix]'); if (!b) return;
+      const it = cur()[+b.dataset.ix];
+      const html = `<h3>${U.esc(it.title)}</h3>` + (it.html || '') + (it.task ? `<p><b>Feladat:</b></p>` + it.task : '');
       b.disabled = true;
       try {
         if (b.dataset.to === 'cop') await post({ channel: 'cop', type: 'lead', id: 'lead', html, kind: 'event' });
@@ -308,7 +390,7 @@
       } catch (err) { U.toast(err.message); }
       b.disabled = false;
     };
-    return draw;
+    return () => draw(false);
   }
   function leadSettings(L, root) {
     root.innerHTML = `<div class="pane scroll"><div class="ph"><h2>Beállítások és export</h2></div>
