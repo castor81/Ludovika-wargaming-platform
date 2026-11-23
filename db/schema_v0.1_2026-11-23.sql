@@ -1,0 +1,4 @@
+-- Ludovika wargaming platform – séma (v0.1, 2026-11-23). Alkalmazva a Supabase "KM-dev" projektben.
+-- Táblák: lwp_groups, lwp_messages (+media_type), lwp_reactions, lwp_config, lwp_events; tároló: lwp-media (50 MB, kép/hang/videó).
+-- Seed: 15 csoport (allam|rend|hon × a–e). A PIN-hash a lwp_config 'lead_pin_sha256' kulcsán van (nincs a repóban).
+-- A teljes DDL a migrációs naplóban: lwp_ludovika_wargaming_platform_v0_1, lwp_messages_media_type.
