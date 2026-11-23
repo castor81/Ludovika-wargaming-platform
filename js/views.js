@@ -19,7 +19,7 @@
   const stText = g => { const s = LWP.status(g); return s.key === 'off' ? STL.off : s.key === 'ok' ? 'aktív' : Math.floor(s.min) + ' perce inaktív'; };
   const dot = k => `<i class="dot" style="background:${STC[k]}"></i>`;
   const groupsOf = b => S.groups.filter(g => g.branch === b).sort((a, c) => a.letter < c.letter ? -1 : 1);
-  const brand = '<div class="brand"><span class="mark">L</span><span>LUDOVIKA <small>wargaming platform</small></span></div>';
+  const brand = '<div class="brand"><img class="mark" src="assets/nke-cimer_96.png" alt="NKE"><span>LUDOVIKA <small>wargaming platform</small></span></div>';
   const ver = () => `v${window.LWP_CONFIG.version} · ${window.LWP_CONFIG.date}`;
 
   async function post(o) {
@@ -154,16 +154,16 @@
       const lg = BKEYS.map(b => `<span><i class="sw" style="background:${BR[b].color}"></i>${BR[b].name}</span>`).join('');
       $('#lg1').innerHTML = lg; $('#lg4').innerHTML = lg;
       if (!window.Chart) { $('#kp').innerHTML = '<p>A diagramkönyvtár nem töltődött be.</p>'; return; }
-      Chart.defaults.color = '#c3c2b7'; Chart.defaults.font.family = "Inter, system-ui, sans-serif"; Chart.defaults.borderColor = 'rgba(255,255,255,.09)';
-      const grid = { color: 'rgba(255,255,255,.07)' };
+      Chart.defaults.color = '#42554c'; Chart.defaults.font.family = "Inter, system-ui, sans-serif"; Chart.defaults.borderColor = 'rgba(0,90,65,.12)';
+      const grid = { color: 'rgba(0,90,65,.10)' };
       const base = { maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } } };
       const charts = {
         c1: new Chart($('#c1'), { type: 'bar', data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderRadius: 4, borderSkipped: 'start', maxBarThickness: 18 }] }, options: Object.assign({}, base, { indexAxis: 'y', scales: { x: { grid, beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } } }) }),
-        c2: new Chart($('#c2'), { type: 'line', data: { labels: [], datasets: BKEYS.map(b => ({ label: BR[b].name, data: [], borderColor: BR[b].color, backgroundColor: BR[b].color, borderWidth: 2, pointRadius: 3, pointBorderColor: '#0c1a2b', pointBorderWidth: 2, tension: .3 })) }, options: Object.assign({}, base, { interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, labels: { usePointStyle: true, boxWidth: 8 } } }, scales: { x: { grid: { display: false } }, y: { grid, beginAtZero: true, ticks: { precision: 0 } } } }) }),
-        c3: new Chart($('#c3'), { type: 'doughnut', data: { labels: Object.values(STL), datasets: [{ data: [], backgroundColor: Object.values(STC), borderColor: '#0c1a2b', borderWidth: 3 }] }, options: Object.assign({}, base, { cutout: '62%', plugins: { legend: { display: true, position: 'right', labels: { usePointStyle: true, boxWidth: 8 } } } }) }),
+        c2: new Chart($('#c2'), { type: 'line', data: { labels: [], datasets: BKEYS.map(b => ({ label: BR[b].name, data: [], borderColor: BR[b].color, backgroundColor: BR[b].color, borderWidth: 2, pointRadius: 3, pointBorderColor: '#ffffff', pointBorderWidth: 2, tension: .3 })) }, options: Object.assign({}, base, { interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, labels: { usePointStyle: true, boxWidth: 8 } } }, scales: { x: { grid: { display: false } }, y: { grid, beginAtZero: true, ticks: { precision: 0 } } } }) }),
+        c3: new Chart($('#c3'), { type: 'doughnut', data: { labels: Object.values(STL), datasets: [{ data: [], backgroundColor: Object.values(STC), borderColor: '#ffffff', borderWidth: 3 }] }, options: Object.assign({}, base, { cutout: '62%', plugins: { legend: { display: true, position: 'right', labels: { usePointStyle: true, boxWidth: 8 } } } }) }),
         c4: new Chart($('#c4'), { type: 'bar', data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderRadius: 4, borderSkipped: 'start', maxBarThickness: 18 }] }, options: Object.assign({}, base, { indexAxis: 'y', scales: { x: { grid, beginAtZero: true }, y: { grid: { display: false } } } }) }),
-        c5: new Chart($('#c5'), { type: 'bar', data: { labels: ['szöveg', 'kép', 'hang', 'videó'], datasets: [{ data: [], backgroundColor: '#5598e7', borderRadius: 4, borderSkipped: 'start', maxBarThickness: 36 }] }, options: Object.assign({}, base, { scales: { x: { grid: { display: false } }, y: { grid, beginAtZero: true, ticks: { precision: 0 } } } }) }),
-        c6: new Chart($('#c6'), { type: 'bar', data: { labels: [], datasets: [{ data: [], backgroundColor: '#5598e7', borderRadius: 4, borderSkipped: 'start', maxBarThickness: 36 }] }, options: Object.assign({}, base, { scales: { x: { grid: { display: false }, ticks: { font: { size: 18 } } }, y: { grid, beginAtZero: true, ticks: { precision: 0 } } } }) })
+        c5: new Chart($('#c5'), { type: 'bar', data: { labels: ['szöveg', 'kép', 'hang', 'videó'], datasets: [{ data: [], backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'start', maxBarThickness: 36 }] }, options: Object.assign({}, base, { scales: { x: { grid: { display: false } }, y: { grid, beginAtZero: true, ticks: { precision: 0 } } } }) }),
+        c6: new Chart($('#c6'), { type: 'bar', data: { labels: [], datasets: [{ data: [], backgroundColor: '#2a78d6', borderRadius: 4, borderSkipped: 'start', maxBarThickness: 36 }] }, options: Object.assign({}, base, { scales: { x: { grid: { display: false }, ticks: { font: { size: 18 } } }, y: { grid, beginAtZero: true, ticks: { precision: 0 } } } }) })
       };
       cleanup.push(() => Object.values(charts).forEach(c => c.destroy()));
       LWP.reloadEvents().catch(() => { });

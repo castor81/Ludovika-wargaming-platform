@@ -3,9 +3,9 @@
   'use strict';
   const CFG = window.LWP_CONFIG;
   const BR = {
-    allam: { name: 'Államigazgatás', short: 'ÁLL', color: '#3987e5' },
-    rend: { name: 'Rendvédelem', short: 'REN', color: '#d95926' },
-    hon: { name: 'Honvédelem', short: 'HON', color: '#199e70' }
+    allam: { name: 'Államigazgatás', short: 'ÁLL', color: '#2a78d6' },
+    rend: { name: 'Rendvédelem', short: 'REN', color: '#d9531e' },
+    hon: { name: 'Honvédelem', short: 'HON', color: '#0f8a5f' }
   };
   const S = {
     groups: [], msgs: [], reacts: [], events: [],

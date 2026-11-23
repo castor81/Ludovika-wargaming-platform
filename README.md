@@ -2,7 +2,7 @@
 
 Egyszerűsített közszolgálati wargaming platform (NKE HHK · KKGY „Hőkupola 2027” gyakorlat), glassmorph felülettel.
 
-**Verzió:** v0.1.0 · 2026-11-23 (a „Wargame Studio” fejlesztési vonaltól független oldalág)
+**Verzió:** v0.1.1 · 2026-11-23 (a „Wargame Studio” fejlesztési vonaltól független oldalág)
 
 ## Felületek
 | Útvonal | Cél |
@@ -27,4 +27,5 @@ A vendorált könyvtárak: supabase-js 2.45.4, Chart.js 4.4.4, qrcode-generator 
 A belépés csoportkód (QR) és PIN alapú UI-zár, nem erős hitelesítés: a táblák anonim olvasása/írása nyitott. Zárt gyakorlati használatra készült; élesebb környezethez Supabase Auth + szigorúbb RLS javasolt.
 
 ## Verziótörténet
+- v0.1.1 (2026-11-23): NKE-arculat (zöld/arany, világos üveghatás), az NKE-címer ismétlődő, áttetsző háttérmintázata, NKE-logó a fejlécben és favicon; adatbázis-jogosultságok (GRANT) pótlása az anon szerepkörnek.
 - v0.1.0 (2026-11-23): első működő változat – COP, gyakorlatvezetői és csoportfelület, média és hangfelvétel, emoji-reakciók, aktivitásmérés, QR-belépés, dashboard + export, forgatókönyv-bejátszás (Hőkupola 2027 minta).
