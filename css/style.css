@@ -295,3 +295,6 @@ h1,h2,h3{color:var(--green)}
 @keyframes fresh{0%{transform:scale(1.03);box-shadow:0 0 0 3px var(--goldl),0 10px 30px rgba(193,153,94,.5)}100%{transform:none;box-shadow:0 0 0 0 transparent}}
 .post.fresh.alarm{animation:freshalarm .9s ease-in-out 5}
 @keyframes freshalarm{0%,100%{box-shadow:0 0 0 0 rgba(218,41,28,.7)}50%{box-shadow:0 0 0 14px rgba(218,41,28,0);background:rgba(218,41,28,.12)}}
+
+.homeseal{display:flex;justify-content:center;margin:28px auto 8px}
+.homeseal img{width:min(240px,60vw);height:auto;filter:drop-shadow(0 6px 18px rgba(0,60,40,.18))}
