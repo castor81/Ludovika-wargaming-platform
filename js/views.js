@@ -45,7 +45,7 @@
           <div class="card glass"><span class="ic">👥</span><h3>Csoport</h3><p>Belépés a COP-on látható QR-kóddal, vagy a csoport kódjának megadásával.</p>
             <form id="tk" class="inl"><input name="t" placeholder="csoportkód" autocomplete="off"><button>Belépés</button></form></div>
         </div>
-        <div class="homeseal"><img src="assets/nke-logo3d_v1.1_2026-11-23.png" alt="Nemzeti Közszolgálati Egyetem – Ludovika" width="240" height="240" decoding="async"></div>
+        <div class="homeseal"><img src="assets/nke-logo3d_v1.2_2026-11-23.webp" alt="Nemzeti Közszolgálati Egyetem – Ludovika" width="340" height="340" decoding="async"></div>
         ${demo ? `<div class="demo glass"><b>Demó üzemmód</b> – helyi tár (nincs szerver-kapcsolat), PIN: <code>demo</code>. Gyors belépés csoportként:<div class="chips">${S.groups.map(g => `<a href="#/g/${esc(g.token)}" style="--c:${BR[g.branch].color}">${esc(g.name)}</a>`).join('')}</div></div>` : ''}
         <footer class="foot">${ver()} · ${S.mode === 'local' ? 'helyi demó' : 'élő kapcsolat'}</footer></main>`;
       $('#tk').onsubmit = e => { e.preventDefault(); const t = e.target.t.value.trim(); if (t) location.hash = '#/g/' + t; };

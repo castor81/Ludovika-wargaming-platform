@@ -297,4 +297,4 @@ h1,h2,h3{color:var(--green)}
 @keyframes freshalarm{0%,100%{box-shadow:0 0 0 0 rgba(218,41,28,.7)}50%{box-shadow:0 0 0 14px rgba(218,41,28,0);background:rgba(218,41,28,.12)}}
 
 .homeseal{display:flex;justify-content:center;margin:28px auto 8px}
-.homeseal img{width:min(240px,60vw);height:auto;filter:drop-shadow(0 6px 18px rgba(0,60,40,.18))}
+.homeseal img{width:min(340px,78vw);height:auto;filter:drop-shadow(0 6px 18px rgba(0,60,40,.18))}
