@@ -10,7 +10,7 @@
   const SCEN = 'scenario/hokupola-2027_forgatokonyv_v0.1_2026-11-23.json';
 
   let cleanup = [];
-  function mount(fn) { cleanup.forEach(f => { try { f(); } catch (_) { } }); cleanup = []; document.body.className = ''; app.innerHTML = ''; fn(); }
+  function mount(fn) { cleanup.forEach(f => { try { f(); } catch (_) { } }); cleanup = []; U.notifStop(); document.body.className = ''; app.innerHTML = ''; fn(); }
   function onSync(f, every) {
     cleanup.push(LWP.on(f));
     const iv = setInterval(f, every || 15000); cleanup.push(() => clearInterval(iv));
@@ -54,13 +54,17 @@
   /* ---------- COP ---------- */
   function qrModal(g) {
     const url = U.groupUrl(g), st = LWP.status(g);
-    U.modal(`<div class="qrbox"><h2 style="color:${BR[g.branch].color}">${esc(g.name)}</h2><div class="qrimg">${U.qrSvg(url)}</div><p class="muted">Olvasd be a táblagéppel a belépéshez</p><p class="st">${dot(st.key)} ${esc(stText(g))}</p><code class="url">${esc(url)}</code></div>`, 'qrm');
+    const mm = U.modal(`<div class="qrbox"><h2 style="color:${BR[g.branch].color}">${esc(g.name)}</h2><div class="qrimg" title="Kattints a teljes méretű nagyításhoz / kicsinyítéshez">${U.qrSvg(url)}</div><p class="muted">Olvasd be a táblagéppel a belépéshez · kattints a kódra a nagyításhoz</p><p class="st">${dot(st.key)} ${esc(stText(g))}</p><code class="url">${esc(url)}</code></div>`, 'qrm');
+    mm.querySelector('.qrimg').onclick = e => e.currentTarget.classList.toggle('xl');
   }
   function allQr() {
-    const m = U.modal(`<h2>Csoportok belépő QR-kódjai</h2><div class="qrgrid">${BKEYS.map(b => groupsOf(b).map(g => `<figure style="--c:${BR[b].color}"><div class="qrimg">${U.qrSvg(U.groupUrl(g))}</div><figcaption>${esc(g.name)}</figcaption></figure>`).join('')).join('')}</div><button class="btn" onclick="window.print()">Nyomtatás</button>`, 'wide printable');
+    const m = U.modal(`<h2>Csoportok belépő QR-kódjai</h2>
+      <div class="qrtools"><label>Méret <input type="range" id="qz" min="110" max="330" value="170"></label><span class="muted">Kattints egy kódra a nagyításhoz.</span><button class="btn" onclick="window.print()">Nyomtatás</button></div>
+      ${BKEYS.map(b => `<section class="qrsec" style="--c:${BR[b].color}"><h3>${BR[b].name}</h3><div class="qrgrid">${groupsOf(b).map(g => `<figure data-g="${g.id}" title="Nagyítás"><div class="qrimg">${U.qrSvg(U.groupUrl(g))}</div><figcaption>${esc(g.name)}</figcaption></figure>`).join('')}</div></section>`).join('')}`, 'wide printable');
+    m.addEventListener('click', e => { const f = e.target.closest('figure[data-g]'); if (f) qrModal(LWP.group(f.dataset.g)); });
+    m.querySelector('#qz').oninput = e => m.style.setProperty('--qs', e.target.value + 'px');
     return m;
   }
-
   function viewCOP() {
     mount(() => {
       document.body.classList.add('cop-body');
@@ -73,6 +77,9 @@
           <div class="chat glass"><div class="chat-h"><b>Közös operatív kép</b><span>közlések és csoportjelentések</span></div><div id="feed"></div></div>
           <aside class="side glass" id="sr"></aside></section></div>`;
       const feed = U.Feed($('#feed'), { channel: 'cop', actor: null, big: true, emptyText: 'Várakozás az első közlésre…' });
+      U.notifStart({ relevant: m => m.channel === 'cop', mine: () => false });
+      $('.acts').insertBefore(Object.assign(document.createElement('span'), { id: 'sndh' }), $('#clock'));
+      U.soundBtn($('#sndh'));
       $('#bqr').onclick = allQr;
       $('#bdash').onclick = () => { location.hash = '#/cop/dashboard'; };
       $('#bfs').onclick = () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => { }); };
@@ -214,6 +221,8 @@
         <button data-t="cop">📣 COP-közlés</button><button data-t="groups">👥 Csoport-munkaterek</button><button data-t="script">📋 Forgatókönyv</button><button data-t="settings">⚙ Beállítások</button></nav>
         <div class="navf"><a href="#/cop" target="_blank" rel="noopener">COP megnyitása ↗</a><a href="#/cop/dashboard" target="_blank" rel="noopener">Dashboard ↗</a><button id="lo">Kilépés</button><small>${ver()}</small></div></aside>
         <section class="main glass" id="mn"></section></div>`;
+      U.notifStart({ relevant: m => m.author_type === 'group' && (m.channel === 'cop' || m.channel.startsWith('lead:')), mine: m => m.author_type === 'lead' });
+      U.soundBtn($('.navf'));
       let tabSync = () => { };
       const go = t => { L.tab = t; $$('.nav nav button').forEach(b => b.classList.toggle('on', b.dataset.t === t)); tabSync = ({ cop: leadCop, groups: leadGroups, script: leadScript, settings: leadSettings }[t])(L, $('#mn')); tabSync && tabSync(); };
       $('.nav nav').onclick = e => { const b = e.target.closest('[data-t]'); if (b) go(b.dataset.t); };
@@ -233,7 +242,7 @@
   function leadCop(L, root) {
     root.innerHTML = `<div class="pane"><div class="ph"><h2>COP-közlés</h2><span class="muted">A közlés mindenki számára megjelenik a kivetítőn és a csoportoknál.</span></div><div id="f"></div><div id="c"></div></div>`;
     const feed = U.Feed($('#f'), { channel: 'cop', actor: 'lead', canMod: true });
-    U.Composer($('#c'), { rich: true, placeholder: 'Közlés szövege (Ctrl+Enter: küldés)…', extra: '<label class="chk"><input type="checkbox" id="pin"> Kiemelés a COP-on</label>', onSend: async ({ body, file, root: r }) => {
+    U.Composer($('#c'), { rich: true, placeholder: 'Közlés szövege (Ctrl+Enter: küldés)…', extra: '<label class="chk alm"><input type="checkbox" id="pin"> 🚨 Kiemelt közlés – sziréna + pulzáló megjelenés, rögzítve a COP-on</label>', onSend: async ({ body, file, root: r }) => {
       await post({ channel: 'cop', type: 'lead', id: 'lead', html: body, file, pinned: $('#pin', r).checked }); $('#pin', r).checked = false; feed.forceBottom();
     } });
     return () => feed.sync();
@@ -253,12 +262,12 @@
       const filter = ch === 'lead' ? (m => m.channel === 'lead:' + gid) : ch === 'cop' ? (m => m.channel === 'cop' && m.author_id === gid && m.author_type === 'group') : (m => m.channel === ch);
       feed = U.Feed($('#f'), { filter, actor: ch === 'lead' ? 'lead' : null, canMod: true, emptyText: 'Még nincs üzenet ebben a csatornában.' });
       if (ch === 'lead') {
-        composer = U.Composer($('#c'), { rich: true, placeholder: 'Üzenet / esemény a csoportnak (Ctrl+Enter: küldés)…', extra: `<label>Címzett <select id="tg"><option value="one">csak ez a csoport</option>${BKEYS.map(b => `<option value="b:${b}">${BR[b].name} – mind az 5 csoport</option>`).join('')}<option value="all">minden csoport (15)</option></select></label><label class="chk"><input type="checkbox" id="ev" checked> Eseményként (kiemelt megjelenés)</label>`, onSend: async ({ body, file, root: r }) => {
+        composer = U.Composer($('#c'), { rich: true, placeholder: 'Üzenet / esemény a csoportnak (Ctrl+Enter: küldés)…', extra: `<label>Címzett <select id="tg"><option value="one">csak ez a csoport</option>${BKEYS.map(b => `<option value="b:${b}">${BR[b].name} – mind az 5 csoport</option>`).join('')}<option value="all">minden csoport (15)</option></select></label><label class="chk"><input type="checkbox" id="ev" checked> Eseményként</label><label class="chk alm"><input type="checkbox" id="al"> 🚨 Kiemelt közlés (sziréna + pulzálás)</label>`, onSend: async ({ body, file, root: r }) => {
           const tg = $('#tg', r).value, g0 = LWP.group(L.gid);
           const targets = tg === 'one' ? [g0.id] : tg === 'all' ? S.groups.map(g => g.id) : S.groups.filter(g => 'b:' + g.branch === tg).map(g => g.id);
           let up = null; if (file) up = await LWP.upload(file);
-          for (const id of targets) await post({ channel: 'lead:' + id, type: 'lead', id: 'lead', html: body, file, upload: up, kind: $('#ev', r).checked ? 'event' : 'text' });
-          feed.forceBottom();
+          for (const id of targets) await post({ channel: 'lead:' + id, type: 'lead', id: 'lead', html: body, file, upload: up, kind: $('#ev', r).checked ? 'event' : 'text', pinned: $('#al', r).checked });
+          $('#al', r).checked = false; feed.forceBottom();
         } });
       } else $('#c').innerHTML = '<p class="muted ro">Betekintés – csak olvasható nézet.</p>';
     }
@@ -343,7 +352,7 @@
   function leadScript(L, root) {
     root.innerHTML = `<div class="pane"><div class="ph"><h2>Forgatókönyv</h2><span class="muted" id="sm"></span>
       <label>Csoport <select id="sg">${S.groups.map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></label>
-      <a class="btn" href="${TEMPLATE}" download>Sablon letöltése (Word)</a><label class="btn pri up">Word feltöltése<input type="file" id="wf" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden></label></div><div id="sc" class="scl"><p class="muted">Betöltés…</p></div></div>`;
+      <label class="chk alm"><input type="checkbox" id="sal"> 🚨 Kiemelten (sziréna)</label><a class="btn" href="${TEMPLATE}" download>Sablon letöltése (Word)</a><label class="btn pri up">Word feltöltése<input type="file" id="wf" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden></label></div><div id="sc" class="scl"><p class="muted">Betöltés…</p></div></div>`;
     let sample = null, sig = '';
     const cur = () => (S.cfg.scenario && S.cfg.scenario.items) ? S.cfg.scenario.items : sample;
     fetch(SCEN).then(r => r.json()).then(j => { sample = normSample(j.items); draw(true); }).catch(() => { sample = []; draw(true); });
@@ -383,8 +392,9 @@
       const html = `<h3>${U.esc(it.title)}</h3>` + (it.html || '') + (it.task ? `<p><b>Feladat:</b></p>` + it.task : '');
       b.disabled = true;
       try {
-        if (b.dataset.to === 'cop') await post({ channel: 'cop', type: 'lead', id: 'lead', html, kind: 'event' });
-        else { const ids = b.dataset.to === 'all' ? S.groups.map(g => g.id) : [$('#sg').value]; for (const id of ids) await post({ channel: 'lead:' + id, type: 'lead', id: 'lead', html, kind: 'event' }); }
+        const al = $('#sal').checked;
+        if (b.dataset.to === 'cop') await post({ channel: 'cop', type: 'lead', id: 'lead', html, kind: 'event', pinned: al });
+        else { const ids = b.dataset.to === 'all' ? S.groups.map(g => g.id) : [$('#sg').value]; for (const id of ids) await post({ channel: 'lead:' + id, type: 'lead', id: 'lead', html, kind: 'event', pinned: al }); }
         await LWP.logEvent(null, 'inject', { no: it.no, to: b.dataset.to });
         U.toast('Bejátszva: ' + it.title.slice(0, 50));
       } catch (err) { U.toast(err.message); }
@@ -428,13 +438,15 @@
       const chan = () => G.tab === 'cop' ? 'cop' : G.tab === 'lead' ? 'lead:' + gid : 'dm:' + [gid, G.other].sort().join('~');
       const rk = c => 'lwp-gr:' + gid + ':' + c;
       const unread = c => S.msgs.filter(m => m.channel === c && !m.deleted && m.author_id !== gid && m.created_at > (localStorage.getItem(rk(c)) || '1970')).length;
-      app.innerHTML = `<div class="grp"><header class="gh glass" id="gh"></header><nav class="gt glass" id="gt"></nav><div class="gb"><aside class="gside glass" id="gs" hidden></aside><div class="gmain glass"><div id="f"></div><div id="c"></div></div></div></div>`;
+      app.innerHTML = `<div class="grp"><header class="gh glass"><div id="gh" class="ghi"></div><span id="gsnd"></span></header><nav class="gt glass" id="gt"></nav><div class="gb"><aside class="gside glass" id="gs" hidden></aside><div class="gmain glass"><div id="f"></div><div id="c"></div></div></div></div>`;
       let curKey = '', feed;
+      U.notifStart({ relevant: m => m.channel === 'cop' || m.channel === 'lead:' + gid || (m.channel.startsWith('dm:') && m.channel.slice(3).split('~').includes(gid)), mine: m => m.author_type === 'group' && m.author_id === gid });
+      U.soundBtn($('#gsnd'));
       function mountChan() {
         const c = chan(); if (c === curKey) return; curKey = c;
         $('#f').innerHTML = ''; $('#c').innerHTML = '';
         if (G.tab === 'dm' && !G.other) { $('#f').innerHTML = '<div class="empty">Válassz egy csoportot a bal oldali listából.</div>'; feed = null; return; }
-        feed = U.Feed($('#f'), { channel: c, actor: gid, emptyText: G.tab === 'cop' ? 'A COP-on még nincs közlés.' : 'Még nincs üzenet. Írj elsőként!' });
+        feed = U.Feed($('#f'), { channel: c, actor: gid, canDel: m => m.author_type === 'group' && m.author_id === gid, emptyText: G.tab === 'cop' ? 'A COP-on még nincs közlés.' : 'Még nincs üzenet. Írj elsőként!' });
         U.Composer($('#c'), { placeholder: G.tab === 'cop' ? 'Közlés a COP-ra (mindenki látja)…' : G.tab === 'lead' ? 'Üzenet a gyakorlatvezetőnek…' : 'Üzenet a másik csoportnak…', onSend: async ({ body, file }) => { await post({ channel: c, type: 'group', id: gid, html: body, file }); feed.forceBottom(); beat(); } });
       }
       function sync() {

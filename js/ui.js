@@ -52,6 +52,90 @@
   }
   const actorName = a => a === 'lead' ? 'Gyakorlatvezető' : (window.LWP.group(a) || { name: a }).name;
 
+  /* ---------- hang (sziréna) ---------- */
+  const AU = { ctx: null, on: (() => { try { return localStorage.getItem('lwp-snd') !== '0'; } catch (_) { return true; } })() };
+  function initAudio() {
+    try { if (!AU.ctx) AU.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (AU.ctx.state === 'suspended') AU.ctx.resume(); } catch (_) { }
+  }
+  ['pointerdown', 'keydown', 'touchstart'].forEach(e => document.addEventListener(e, initAudio, { passive: true }));
+  function siren(sec) {
+    if (!AU.on || !AU.ctx || AU.ctx.state !== 'running') return false;
+    const c = AU.ctx, o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+    o.type = 'sawtooth';
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(.2, t + .12);
+    g.gain.setValueAtTime(.2, t + sec - .35); g.gain.exponentialRampToValueAtTime(.0001, t + sec);
+    o.frequency.setValueAtTime(650, t);
+    for (let k = 0; k < Math.ceil(sec / .9); k++) { o.frequency.linearRampToValueAtTime(980, t + k * .9 + .45); o.frequency.linearRampToValueAtTime(650, t + k * .9 + .9); }
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + sec + .05);
+    return true;
+  }
+  function beep() {
+    if (!AU.ctx || AU.ctx.state !== 'running') return;
+    const c = AU.ctx, o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+    o.frequency.value = 880; g.gain.setValueAtTime(.15, t); g.gain.exponentialRampToValueAtTime(.0001, t + .25); o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + .3);
+  }
+  /* hangkapcsoló gomb: a böngésző csak felhasználói kattintás után engedi a hangot */
+  function soundBtn(host) {
+    const b = document.createElement('button'); b.className = 'btn snd'; host.appendChild(b);
+    const paint = () => {
+      const run = AU.ctx && AU.ctx.state === 'running';
+      b.textContent = !AU.on ? '🔕 Hang ki' : run ? '🔔 Hang be' : '🔇 Hang engedélyezése';
+      b.classList.toggle('need', AU.on && !run);
+    };
+    b.onclick = () => { AU.on = !(AU.on && AU.ctx && AU.ctx.state === 'running') ? true : false; try { localStorage.setItem('lwp-snd', AU.on ? '1' : '0'); } catch (_) { } initAudio(); setTimeout(() => { if (AU.on) beep(); paint(); }, 120); paint(); };
+    const iv = setInterval(() => { if (!b.isConnected) clearInterval(iv); else paint(); }, 800); paint();
+    return b;
+  }
+
+  /* ---------- értesítő: új közlés előbb nagy pop-up, majd beágyazódik a hírfolyamba ---------- */
+  const Notif = { seen: new Set(), holding: new Set(), released: new Map(), queue: [], busy: false, cfg: null, off: null };
+  function notifStop() {
+    if (Notif.off) Notif.off(); Notif.off = null; Notif.queue = []; Notif.holding.clear(); Notif.busy = false;
+    document.querySelectorAll('.alertpop').forEach(e => e.remove());
+  }
+  function notifStart(cfg) {
+    notifStop(); Notif.cfg = cfg; Notif.seen = new Set(S.msgs.map(m => m.id));
+    Notif.off = window.LWP.on(notifCheck);
+  }
+  function notifCheck() {
+    const now = Date.now();
+    S.msgs.forEach(m => {
+      if (Notif.seen.has(m.id)) return; Notif.seen.add(m.id);
+      if (m.deleted || now - new Date(m.created_at) > 300000) return;
+      if (Notif.cfg.mine(m) || !Notif.cfg.relevant(m)) return;
+      Notif.holding.add(m.id); Notif.queue.push(m);
+    });
+    notifRun();
+  }
+  function whereLabel(m) {
+    if (m.channel === 'cop') return 'COP';
+    if (m.channel.startsWith('lead:')) return m.author_type === 'lead' ? 'Üzenet a gyakorlatvezetőtől' : 'Üzenet a gyakorlatvezetőnek';
+    return 'Csoportközi üzenet';
+  }
+  function notifRun() {
+    if (Notif.busy || !Notif.queue.length) return;
+    Notif.busy = true;
+    const m = Notif.queue.shift(), rest = Notif.queue.length, a = author(m), mt = mediaType(m);
+    const alarm = !!m.pinned && m.author_type === 'lead';
+    const body = m.body ? `<div class="ap-b">${m.author_type === 'group' ? plainHTML(m.body) : sanitize(m.body)}</div>` : '';
+    const media = mt === 'image' ? `<img class="ap-m" src="${esc(m.media_url)}" alt="">` : mt === 'video' ? `<video class="ap-m" src="${esc(m.media_url)}" muted autoplay loop playsinline></video>` : mt === 'audio' ? '<div class="ap-b">🎵 Hangüzenet</div>' : mt === 'file' ? `<div class="ap-b">📎 ${esc(m.media_name || 'fájl')}</div>` : '';
+    const el = h(`<div class="ap-card" style="--c:${a.color}"><div class="ap-h"><span class="ava">${esc(a.short)}</span><div><b>${esc(a.name)}</b><small>${esc(whereLabel(m))} · ${fmtHM(m.created_at)}</small></div>${alarm ? '<span class="badge ev">KIEMELT KÖZLÉS</span>' : m.kind === 'event' ? '<span class="badge ev">ESEMÉNY</span>' : '<span class="badge">ÚJ KÖZLÉS</span>'}</div>${body}${media}${rest ? `<div class="ap-more">+${rest} további új közlés vár</div>` : ''}</div>`);
+    const wrap = document.createElement('div'); wrap.className = 'alertpop' + (alarm ? ' alarm' : ''); wrap.appendChild(el);
+    document.body.appendChild(wrap);
+    if (alarm) siren(3.6); else beep();
+    const dur = alarm ? 4500 : rest > 2 ? 1500 : 2800;
+    let done = false;
+    const finish = () => {
+      if (done) return; done = true; wrap.classList.add('out');
+      setTimeout(() => {
+        wrap.remove(); Notif.holding.delete(m.id); Notif.released.set(m.id, alarm);
+        setTimeout(() => Notif.released.delete(m.id), 8000);
+        Notif.busy = false; window.LWP.touch(); notifRun();
+      }, 350);
+    };
+    wrap.onclick = finish; setTimeout(finish, dur);
+  }
+
   /* ---------- Feed ---------- */
   function Feed(root, o) {
     o = o || {};
@@ -80,6 +164,7 @@
     function build(m) {
       const a = author(m), el = document.createElement('article');
       el.className = 'post' + (m.kind === 'event' ? ' event' : '') + (m.author_type === 'lead' ? ' fromlead' : '');
+      if (Notif.released.has(m.id)) { el.classList.add('fresh'); if (Notif.released.get(m.id)) el.classList.add('alarm'); setTimeout(() => el.classList.remove('fresh', 'alarm'), 5000); }
       el.dataset.id = m.id;
       el.style.setProperty('--c', a.color);
       const body = m.body ? (m.author_type === 'group' ? plainHTML(m.body) : sanitize(m.body)) : '';
@@ -89,7 +174,7 @@
       else if (mt === 'video') media = `<video class="pm" controls preload="metadata" src="${esc(m.media_url)}"></video>`;
       else if (mt === 'audio') media = `<audio class="pa" controls preload="metadata" src="${esc(m.media_url)}"></audio>`;
       else if (mt === 'file') media = `<a class="pf" href="${esc(m.media_url)}" target="_blank" rel="noopener">📎 ${esc(m.media_name || 'fájl')}</a>`;
-      el.innerHTML = `<header><span class="ava">${esc(a.short)}</span><div class="who"><b>${esc(a.name)}</b>${a.badge ? `<span class="badge">${esc(a.badge)}</span>` : ''}${m.kind === 'event' ? '<span class="badge ev">ESEMÉNY</span>' : ''}<time>${fmtTime(m.created_at)}</time></div>${o.canMod ? `<span class="mod"><button data-pin title="Kiemelés">📌</button><button data-del title="Törlés">🗑</button></span>` : ''}</header>${body ? `<div class="pb">${body}</div>` : ''}${media ? `<div class="pmedia">${media}</div>` : ''}<footer class="rx"></footer>`;
+      el.innerHTML = `<header><span class="ava">${esc(a.short)}</span><div class="who"><b>${esc(a.name)}</b>${a.badge ? `<span class="badge">${esc(a.badge)}</span>` : ''}${m.kind === 'event' ? '<span class="badge ev">ESEMÉNY</span>' : ''}<time>${fmtTime(m.created_at)}</time></div>${(o.canMod || (o.canDel && o.canDel(m))) ? `<span class="mod">${o.canMod ? '<button data-pin title="Kiemelés a COP-on">📌 Kiemel</button>' : ''}<button data-del title="Közlés törlése">🗑 Törlés</button></span>` : ''}</header>${body ? `<div class="pb">${body}</div>` : ''}${media ? `<div class="pmedia">${media}</div>` : ''}<footer class="rx"></footer>`;
       el._sig = null;
       return el;
     }
@@ -102,7 +187,7 @@
       if (!open) el.querySelector('.rx').innerHTML = rxHTML(m, list);
     }
     function sync() {
-      const list = S.msgs.filter(m => !m.deleted && (o.filter ? o.filter(m) : m.channel === o.channel));
+      const list = S.msgs.filter(m => !m.deleted && !Notif.holding.has(m.id) && (o.filter ? o.filter(m) : m.channel === o.channel));
       const by = rxByMsg(), keep = new Set();
       let prev = null;
       list.forEach(m => {
@@ -129,7 +214,12 @@
       const rx = e.target.closest('[data-rx]');
       if (rx && o.actor) { post.querySelector('.picker') && post.querySelector('.picker').classList.remove('open'); window.LWP.react(id, o.actor, rx.dataset.rx).catch(err => toast(err.message)); return; }
       if (e.target.closest('[data-pin]')) { const m = S.msgs.find(x => x.id === id); window.LWP.patchMsg(id, { pinned: !m.pinned }); return; }
-      if (e.target.closest('[data-del]')) { if (confirm('Biztosan törlöd ezt a közlést mindenki felületéről?')) window.LWP.patchMsg(id, { deleted: true }); return; }
+      if (e.target.closest('[data-del]')) {
+        const m = S.msgs.find(x => x.id === id);
+        if (!(o.canMod || (o.canDel && m && o.canDel(m)))) return;
+        if (confirm('Biztosan törlöd ezt a közlést mindenki felületéről?')) window.LWP.patchMsg(id, { deleted: true }).catch(err => toast(err.message));
+        return;
+      }
       if (e.target.matches('[data-zoom]')) lightbox(e.target.src);
     });
     return { sync, el: root, forceBottom() { stick = true; root.scrollTop = root.scrollHeight; } };
@@ -239,5 +329,5 @@
   const csvCell = v => { v = v == null ? '' : String(v); return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
   const toCSV = rows => '﻿' + rows.map(r => r.map(csvCell).join(';')).join('\r\n');
 
-  window.UI = { EMOJI, esc, h, $, $$, fmtTime, fmtHM, fmtDur, sanitize, plainHTML, mediaType, kindOfFile, author, actorName, Feed, Composer, toast, lightbox, modal, qrSvg, groupUrl, download, toCSV };
+  window.UI = { Notif, notifStart, notifStop, soundBtn, siren, EMOJI, esc, h, $, $$, fmtTime, fmtHM, fmtDur, sanitize, plainHTML, mediaType, kindOfFile, author, actorName, Feed, Composer, toast, lightbox, modal, qrSvg, groupUrl, download, toCSV };
 })();

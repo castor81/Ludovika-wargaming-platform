@@ -186,6 +186,7 @@
       emit();
     },
     mode: () => S.mode,
+    touch: () => emit(),
     group: id => S.groups.find(g => g.id === id),
     groupByToken: t => S.groups.find(g => g.token === t),
     status(g) {
