@@ -29,7 +29,7 @@
       media_url = up.url; media_name = up.name; media_type = U.kindOfFile(o.file);
       if (kind !== 'event') kind = media_type;
     } else if (o.media) { media_url = o.media.url; media_name = o.media.name; media_type = o.media.type; if (kind !== 'event') kind = media_type; }
-    return LWP.send({ channel: o.channel, author_type: o.type, author_id: o.id, kind, body: o.html || null, media_url, media_name, media_type, pinned: !!o.pinned });
+    return LWP.send({ channel: o.channel, author_type: o.type, author_id: o.id, kind, body: o.html || null, media_url, media_name, media_type, pinned: !!o.pinned, reply_to: o.reply_to || null });
   }
 
   /* ---------- nyitóoldal ---------- */
@@ -107,33 +107,48 @@
       const mine = S.msgs.filter(m => m.author_type === 'group' && m.author_id === g.id && !m.deleted);
       const ids = new Set(mine.map(m => m.id));
       const got = S.reacts.filter(r => ids.has(r.message_id)).length;
-      // válaszidő: vezetői üzenet a csoport csatornájában -> a csoport első üzenete utána
+      // válaszidő: vezetői közlés -> a csoport válasza. Elsőbbség: kifejezett hivatkozás (reply_to); különben a csoport első, hivatkozás nélküli üzenete
+      // a következő vezetői üzenetig, de legfeljebb a megadott időablakon (replyWindowMin) belül. Ablakon kívüli üzenet nem számít válasznak.
+      const WIN = (window.LWP_CONFIG.replyWindowMin || 30) * 60000;
       const ch = S.msgs.filter(m => m.channel === 'lead:' + g.id && !m.deleted);
-      const times = [];
+      const times = []; let unans = 0;
       ch.forEach((m, i) => {
         if (m.author_type !== 'lead') return;
-        const r = ch.slice(i + 1).find(x => x.author_type === 'group');
-        if (r) times.push((new Date(r.created_at) - new Date(m.created_at)) / 1000);
+        const t0 = new Date(m.created_at).getTime();
+        let r = S.msgs.filter(x => !x.deleted && x.author_type === 'group' && x.author_id === g.id && x.reply_to === m.id).sort((a, b) => a.created_at < b.created_at ? -1 : 1)[0];
+        if (!r) {
+          const nx = ch.slice(i + 1).find(x => x.author_type === 'lead');
+          const end = Math.min(nx ? new Date(nx.created_at).getTime() : Infinity, t0 + WIN);
+          r = ch.slice(i + 1).find(x => x.author_type === 'group' && !x.reply_to && new Date(x.created_at).getTime() <= end);
+        }
+        if (r) times.push((new Date(r.created_at) - t0) / 1000); else unans++;
       });
       times.sort((a, b) => a - b);
       const med = times.length ? times[Math.floor(times.length / 2)] : null;
       const ev = S.events.filter(e => e.group_id === g.id);
-      return { g, msgs: mine.length, media: mine.filter(m => U.mediaType(m)).length, reacts: got, active: g.active_sec || 0, logins: ev.filter(e => e.type === 'login').length, helps: ev.filter(e => e.type === 'help').length, med, leadMsgs: ch.filter(m => m.author_type === 'lead').length };
+      return { g, msgs: mine.length, media: mine.filter(m => U.mediaType(m)).length, reacts: got, active: g.active_sec || 0, logins: ev.filter(e => e.type === 'login').length, helps: ev.filter(e => e.type === 'help').length, med, unans, answered: times.length, leadMsgs: ch.filter(m => m.author_type === 'lead').length };
     });
     return per;
   }
+  /* az exportok (üzenettartalom!) csak gyakorlatvezetői PIN-nel érhetők el; a dashboard nézet a COP-ról továbbra is nyitott */
+  function pinGate(fn) {
+    if (sessionStorage.getItem('lwp-lead')) return fn();
+    const m = U.modal('<h2>Gyakorlatvezetői PIN</h2><p class="muted">Az exportok a teljes üzenettartalmat tartalmazzák, ezért PIN szükséges.</p><form id="pg" class="inl"><input name="p" type="password" placeholder="PIN" autocomplete="off" autofocus><button class="btn pri">Export</button></form><p id="pe" class="err"></p>');
+    m.querySelector('#pg').onsubmit = async e => { e.preventDefault(); if ((await LWP.sha256(e.target.p.value)) === S.cfg.pin) { m.remove(); fn(); } else m.querySelector('#pe').textContent = 'Hibás PIN.'; };
+    setTimeout(() => m.querySelector('input') && m.querySelector('input').focus(), 30);
+  }
   function exportMessages() {
-    const rows = [['idő', 'csatorna', 'szerző', 'típus', 'szöveg', 'média', 'kiemelt', 'törölt', 'reakciók']];
+    const rows = [['azonosító', 'válasz erre (azonosító)', 'idő', 'csatorna', 'szerző', 'típus', 'szöveg', 'média', 'kiemelt', 'törölt', 'reakciók']];
     S.msgs.forEach(m => {
       const rx = S.reacts.filter(r => r.message_id === m.id).map(r => r.emoji + ' ' + U.actorName(r.actor)).join(' | ');
       const txt = m.body ? (m.author_type === 'group' ? m.body : U.sanitize(m.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')) : '';
-      rows.push([m.created_at, m.channel, U.author(m).name, m.kind, txt, m.media_name || '', m.pinned ? 'igen' : '', m.deleted ? 'igen' : '', rx]);
+      rows.push([m.id, m.reply_to || '', m.created_at, m.channel, U.author(m).name, m.kind, txt, m.media_name || '', m.pinned ? 'igen' : '', m.deleted ? 'igen' : '', rx]);
     });
     U.download(`ludovika-uzenetek_v${window.LWP_CONFIG.version}_${new Date().toISOString().slice(0, 10)}.csv`, U.toCSV(rows), 'text/csv;charset=utf-8');
   }
   function exportSummary() {
-    const rows = [['ág', 'csoport', 'üzenetek', 'média', 'kapott reakciók', 'aktív idő (perc)', 'belépések', 'segélykérések', 'vezetői közlések', 'medián válaszidő (mp)', 'utolsó aktivitás']];
-    stats().forEach(s => rows.push([BR[s.g.branch].name, s.g.name, s.msgs, s.media, s.reacts, Math.round(s.active / 60), s.logins, s.helps, s.leadMsgs, s.med == null ? '' : Math.round(s.med), s.g.last_seen || '']));
+    const rows = [['ág', 'csoport', 'üzenetek', 'média', 'kapott reakciók', 'aktív idő (perc)', 'belépések', 'segélykérések', 'vezetői közlések', 'medián válaszidő (mp)', 'megválaszolt közlés', 'megválaszolatlan közlés', 'utolsó aktivitás']];
+    stats().forEach(s => rows.push([BR[s.g.branch].name, s.g.name, s.msgs, s.media, s.reacts, Math.round(s.active / 60), s.logins, s.helps, s.leadMsgs, s.med == null ? '' : Math.round(s.med), s.answered, s.unans, s.g.last_seen || '']));
     U.download(`ludovika-osszesito_v${window.LWP_CONFIG.version}_${new Date().toISOString().slice(0, 10)}.csv`, U.toCSV(rows), 'text/csv;charset=utf-8');
   }
   function exportJSON() {
@@ -158,7 +173,7 @@
         </section>
         <section class="glass tbl"><h3>Csoportonkénti összesítő</h3><div class="tw"><table id="tb"></table></div></section></div>`;
       $('#back').onclick = () => { location.hash = '#/cop'; };
-      $('#e1').onclick = exportMessages; $('#e2').onclick = exportSummary; $('#e3').onclick = exportJSON;
+      $('#e1').onclick = () => pinGate(exportMessages); $('#e2').onclick = () => pinGate(exportSummary); $('#e3').onclick = () => pinGate(exportJSON);
       const lg = BKEYS.map(b => `<span><i class="sw" style="background:${BR[b].color}"></i>${BR[b].name}</span>`).join('');
       $('#lg1').innerHTML = lg; $('#lg4').innerHTML = lg;
       if (!window.Chart) { $('#kp').innerHTML = '<p>A diagramkönyvtár nem töltődött be.</p>'; return; }
@@ -440,15 +455,23 @@
       const rk = c => 'lwp-gr:' + gid + ':' + c;
       const unread = c => S.msgs.filter(m => m.channel === c && !m.deleted && m.author_id !== gid && m.created_at > (localStorage.getItem(rk(c)) || '1970')).length;
       app.innerHTML = `<div class="grp"><header class="gh glass"><div id="gh" class="ghi"></div><span id="gsnd"></span></header><nav class="gt glass" id="gt"></nav><div class="gb"><aside class="gside glass" id="gs" hidden></aside><div class="gmain glass"><div id="f"></div><div id="c"></div></div></div></div>`;
-      let curKey = '', feed;
+      let curKey = '', feed, replyTo = null;
       U.notifStart({ relevant: m => m.channel === 'cop' || m.channel === 'lead:' + gid || (m.channel.startsWith('dm:') && m.channel.slice(3).split('~').includes(gid)), mine: m => m.author_type === 'group' && m.author_id === gid });
       U.soundBtn($('#gsnd'));
       function mountChan() {
         const c = chan(); if (c === curKey) return; curKey = c;
         $('#f').innerHTML = ''; $('#c').innerHTML = '';
         if (G.tab === 'dm' && !G.other) { $('#f').innerHTML = '<div class="empty">Válassz egy csoportot a bal oldali listából.</div>'; feed = null; return; }
-        feed = U.Feed($('#f'), { channel: c, actor: gid, canDel: m => m.author_type === 'group' && m.author_id === gid, emptyText: G.tab === 'cop' ? 'A COP-on még nincs közlés.' : 'Még nincs üzenet. Írj elsőként!' });
-        U.Composer($('#c'), { placeholder: G.tab === 'cop' ? 'Közlés a COP-ra (mindenki látja)…' : G.tab === 'lead' ? 'Üzenet a gyakorlatvezetőnek…' : 'Üzenet a másik csoportnak…', onSend: async ({ body, file }) => { await post({ channel: c, type: 'group', id: gid, html: body, file }); feed.forceBottom(); beat(); } });
+        replyTo = null; feed = U.Feed($('#f'), { channel: c, actor: gid, canReply: m => m.author_id !== gid, onReply: m => { replyTo = m; showRp(); $('#c .cx-in, #c textarea') && $('#c .cx-in, #c textarea').focus(); }, canDel: m => m.author_type === 'group' && m.author_id === gid, emptyText: G.tab === 'cop' ? 'A COP-on még nincs közlés.' : 'Még nincs üzenet. Írj elsőként!' });
+        U.Composer($('#c'), { placeholder: G.tab === 'cop' ? 'Közlés a COP-ra (mindenki látja)…' : G.tab === 'lead' ? 'Üzenet a gyakorlatvezetőnek…' : 'Üzenet a másik csoportnak…', onSend: async ({ body, file }) => { await post({ channel: c, type: 'group', id: gid, html: body, file, reply_to: replyTo && replyTo.id }); replyTo = null; showRp(); feed.forceBottom(); beat(); } });
+      }
+      function showRp() {
+        let r = $('#rp'); if (r) r.remove(); if (!replyTo) return;
+        const t = (replyTo.body ? U.plainHTML(replyTo.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : (replyTo.media_name || 'média')).slice(0, 80);
+        r = document.createElement('div'); r.id = 'rp'; r.className = 'rpchip';
+        r.innerHTML = `<span>↩ Válasz erre: <b>${esc(U.author(replyTo).name)}</b> – ${esc(t)}</span><button type="button" title="Válasz elvetése">✕</button>`;
+        r.querySelector('button').onclick = () => { replyTo = null; showRp(); };
+        $('#c').prepend(r);
       }
       function sync() {
         const g = me(), s = LWP.status(g), c = chan();

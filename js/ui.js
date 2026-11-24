@@ -161,6 +161,13 @@
       const add = o.actor ? `<span class="rxadd"><button class="rxplus" data-rxopen title="Reagálok">☺＋</button><span class="picker">${EMOJI.map(e => `<button data-rx="${e}">${e}</button>`).join('')}</span></span>` : '';
       return chips + add;
     }
+    function rq(m) {
+      if (!m.reply_to) return '';
+      const q = S.msgs.find(x => x.id === m.reply_to);
+      if (!q) return '<div class="rq">↩ válasz egy korábbi üzenetre</div>';
+      const t = (q.body ? plainHTML(q.body).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : (q.media_name || 'média')).slice(0, 110);
+      return `<div class="rq">↩ válasz erre: <b>${esc(author(q).name)}</b> – ${esc(t)}</div>`;
+    }
     function build(m) {
       const a = author(m), el = document.createElement('article');
       el.className = 'post' + (m.kind === 'event' ? ' event' : '') + (m.author_type === 'lead' ? ' fromlead' : '');
@@ -174,7 +181,7 @@
       else if (mt === 'video') media = `<video class="pm" controls preload="metadata" src="${esc(m.media_url)}"></video>`;
       else if (mt === 'audio') media = `<audio class="pa" controls preload="metadata" src="${esc(m.media_url)}"></audio>`;
       else if (mt === 'file') media = `<a class="pf" href="${esc(m.media_url)}" target="_blank" rel="noopener">📎 ${esc(m.media_name || 'fájl')}</a>`;
-      el.innerHTML = `<header><span class="ava">${esc(a.short)}</span><div class="who"><b>${esc(a.name)}</b>${a.badge ? `<span class="badge">${esc(a.badge)}</span>` : ''}${m.kind === 'event' ? '<span class="badge ev">ESEMÉNY</span>' : ''}<time>${fmtTime(m.created_at)}</time></div>${(o.canMod || (o.canDel && o.canDel(m))) ? `<span class="mod">${o.canMod ? '<button data-pin title="Kiemelés a COP-on">📌 Kiemel</button>' : ''}<button data-del title="Közlés törlése">🗑 Törlés</button></span>` : ''}</header>${body ? `<div class="pb">${body}</div>` : ''}${media ? `<div class="pmedia">${media}</div>` : ''}<footer class="rx"></footer>`;
+      el.innerHTML = `<header><span class="ava">${esc(a.short)}</span><div class="who"><b>${esc(a.name)}</b>${a.badge ? `<span class="badge">${esc(a.badge)}</span>` : ''}${m.kind === 'event' ? '<span class="badge ev">ESEMÉNY</span>' : ''}<time>${fmtTime(m.created_at)}</time></div>${(o.canMod || (o.canDel && o.canDel(m)) || (o.canReply && o.canReply(m))) ? `<span class="mod">${(o.canReply && o.canReply(m)) ? '<button data-reply title="Válasz erre az üzenetre">↩ Válasz</button>' : ''}${o.canMod ? '<button data-pin title="Kiemelés a COP-on">📌 Kiemel</button>' : ''}${(o.canMod || (o.canDel && o.canDel(m))) ? '<button data-del title="Közlés törlése">🗑 Törlés</button>' : ''}</span>` : ''}</header>${rq(m)}${body ? `<div class="pb">${body}</div>` : ''}${media ? `<div class="pmedia">${media}</div>` : ''}<footer class="rx"></footer>`;
       el._sig = null;
       return el;
     }
@@ -213,6 +220,7 @@
       if (open) { const p = post.querySelector('.picker'); $$('.picker.open', root).forEach(x => x !== p && x.classList.remove('open')); p.classList.toggle('open'); return; }
       const rx = e.target.closest('[data-rx]');
       if (rx && o.actor) { post.querySelector('.picker') && post.querySelector('.picker').classList.remove('open'); window.LWP.react(id, o.actor, rx.dataset.rx).catch(err => toast(err.message)); return; }
+      if (e.target.closest('[data-reply]')) { const m = S.msgs.find(x => x.id === id); if (m && o.onReply) o.onReply(m); return; }
       if (e.target.closest('[data-pin]')) { const m = S.msgs.find(x => x.id === id); window.LWP.patchMsg(id, { pinned: !m.pinned }); return; }
       if (e.target.closest('[data-del]')) {
         const m = S.msgs.find(x => x.id === id);

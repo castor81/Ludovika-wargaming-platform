@@ -2,7 +2,7 @@
 
 Egyszerűsített közszolgálati wargaming platform (NKE HHK · KKGY „Hőkupola 2027” gyakorlat), glassmorph felülettel.
 
-**Verzió:** v0.3.2 · 2026-11-23 (a „Wargame Studio” fejlesztési vonaltól független oldalág)
+**Verzió:** v0.4.0 · 2026-11-23 (a „Wargame Studio” fejlesztési vonaltól független oldalág)
 
 ## Felületek
 | Útvonal | Cél |
@@ -27,6 +27,7 @@ A vendorált könyvtárak: supabase-js 2.45.4, Chart.js 4.4.4, qrcode-generator 
 A belépés csoportkód (QR) és PIN alapú UI-zár, nem erős hitelesítés: a táblák anonim olvasása/írása nyitott. Zárt gyakorlati használatra készült; élesebb környezethez Supabase Auth + szigorúbb RLS javasolt.
 
 ## Verziótörténet
+- v0.4.0 (2026-11-24): a terheléses ellenőrző teszt alapján. (1) „↩ Válasz” funkció: a csoportüzenet kifejezetten hivatkozhat egy közlésre/üzenetre (új `lwp_messages.reply_to` oszlop), a hírfolyamban idézetsor jelenik meg, az export külön oszlopokban tartalmazza az üzenet- és a hivatkozott azonosítót. (2) Hiba javítva: a válaszidő párosítása időablakot kap (`replyWindowMin`, alap 30 perc, és legfeljebb a következő vezetői üzenetig), a kifejezett hivatkozás elsőbbséget élvez; az ablakon kívüli üzenet nem válasz, a közlés „megválaszolatlan” (új oszlopok az összesítő exportban). Korábban az előző napi közlések 24 órás mediánt okoztak. (3) Az exportok (üzenet CSV, összesítő CSV, teljes JSON) gyakorlatvezetői PIN-t kérnek; a dashboard nézet a COP-ról továbbra is nyitott (az aggregált adatok miatt). A törölt üzenetek az exportban „törölt” jelöléssel megmaradnak.
 - v0.3.2 (2026-11-23): a belépő oldali NKE–Ludovika logó nagyobb (340 px) és az eredeti animáció szerint forog (animált WebP, `assets/nke-logo3d_v1.2_2026-11-23.webp`, 72 képkocka, végtelen ismétlés).
 - v0.3.1 (2026-11-23): a belépő (kezdő) oldalon a belépési funkciók alatt középen megjelenik az NKE–Ludovika 3D logó (`assets/nke-logo3d_v1.1_2026-11-23.png`).
 - v0.3.0 (2026-11-23): QR-kódok ágak szerint csoportosítva, méretcsúszkával és kattintásos nagyítással; közlések törlése (gyakorlatvezető bármit, csoport csak a sajátját – puha törlés, az adat megmarad a kiértékeléshez); új közlések nagy pop-upban jelennek meg 2–3 mp-ig, majd beágyazódnak a hírfolyamba; a gyakorlatvezető kiemelt közlései sziréna hanggal és pulzáló megjelenéssel (hangengedélyező gomb).
